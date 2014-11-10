@@ -85,6 +85,8 @@ public final class MethodEditor {
 
   private HandlerPatch methodHandlerPatches;
 
+  private SignaturePatch updateSignaturePatch;
+
   private int nextLabel;
 
   /**
@@ -335,6 +337,7 @@ public final class MethodEditor {
     methodStartPatches = null;
     afterMethodPatches = null;
     methodHandlerPatches = null;
+    updateSignaturePatch = null;
     patchCount = 0;
   }
 
@@ -353,6 +356,7 @@ public final class MethodEditor {
     methodStartPatches = null;
     afterMethodPatches = null;
     methodHandlerPatches = null;
+    updateSignaturePatch = null;
   }
 
   /**
@@ -362,6 +366,61 @@ public final class MethodEditor {
     verifyState(DURING_PASS);
     return nextLabel++;
   }
+
+    static public final class SignaturePatch {
+	private final String newSignature;
+	private final String[] paramTypes;
+	private final String returnType;
+	private final java.util.BitSet changeSet;
+	private final int changeCardinality;
+
+	public SignaturePatch(String newSignature, String[] paramTypes, String returnType, java.util.BitSet changeSet, int changeCardinality) {
+	    this.newSignature = newSignature;
+	    this.paramTypes = paramTypes;
+	    this.returnType = returnType;
+	    this.changeSet = changeSet;
+	    this.changeCardinality = changeCardinality;
+	}
+
+	public String getParamType(int i) {
+	    return paramTypes[i];
+	}
+	
+	/**
+	 * 
+	 * @return whether this patch changes anything
+	 */
+	public boolean hasChanges() {
+	    return changeCardinality > 0;
+	}
+
+	public String getNewSignature() {
+	    return newSignature;
+	}
+
+	public java.util.BitSet getChangeSet() {
+	    return changeSet;
+	}
+
+	public boolean hasParamTypeChanged(int i) {
+	    return changeSet.get(i);
+	}
+
+	public boolean hasReturnChanged() {
+	    return changeSet.get(getNumParams() - 1);
+	}
+
+	public int getNumParams() {
+	    return paramTypes.length;
+	}
+    }
+
+    public void updateSignature(SignaturePatch patch) {
+	if (updateSignaturePatch == null) {
+	    patchCount++;
+	}
+	updateSignaturePatch = patch;
+    }
 
   /**
    * Insert code to be executed whenever the method is entered. This code is not protected by any exception handlers (other than
@@ -542,6 +601,10 @@ public final class MethodEditor {
     w.originalBytecode = 0;
     for (Patch p = methodStartPatches; p != null; p = p.next) {
       p.emitTo(w);
+    }
+
+    if (methodInfo != null && updateSignaturePatch != null) {
+	methodInfo.setSignature(updateSignaturePatch);
     }
 
     ExceptionHandler[] methodHandlers = makeExceptionArray(methodHandlerPatches);

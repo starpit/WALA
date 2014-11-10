@@ -293,6 +293,7 @@ final public class ClassInstrumenter {
       MethodData md = methods[i];
       if (!deletedMethods[i]) {
         if (md == null || !md.getHasChanged()) {
+	  System.err.println("UNCHANGED emitClassInfo methodName=" + md.getName() + " updatedSig=" + md.hasUpdatedSignature() + " " + md.getSignature());
           w.addRawMethod(new ClassWriter.RawElement(cr.getBytes(), cr.getMethodRawOffset(i), cr.getMethodRawSize(i)));
         } else {
           CTCompiler comp = CTCompiler.make(w, md);
@@ -312,12 +313,14 @@ final public class ClassInstrumenter {
           int flags = cr.getMethodAccessFlags(i);
           // we're not installing a native method here
           flags &= ~ClassConstants.ACC_NATIVE;
-          w.addMethod(flags, cr.getMethodNameIndex(i), cr.getMethodTypeIndex(i), makeMethodAttributes(i, w, oc, comp.getOutput(), md));
+	  System.err.println("CHANGED emitClassInfo methodName=" + md.getName() + " updatedSig=" + md.hasUpdatedSignature() + " " + md.getSignature());
+          if (md.hasUpdatedSignature()) w.addMethod(flags, cr.getMethodNameIndex(i),  md.getSignature(), makeMethodAttributes(i, w, oc, comp.getOutput(), md, md.getSignaturePatch()));
+          else w.addMethod(flags, cr.getMethodNameIndex(i), cr.getMethodTypeIndex(i), makeMethodAttributes(i, w, oc, comp.getOutput(), md, null));
           Compiler.Output[] aux = comp.getAuxiliaryMethods();
           if (aux != null) {
             for (int j = 0; j < aux.length; j++) {
               Compiler.Output a = aux[j];
-              w.addMethod(a.getAccessFlags(), a.getMethodName(), a.getMethodSignature(), makeMethodAttributes(i, w, oc, a, md));
+              w.addMethod(a.getAccessFlags(), a.getMethodName(), a.getMethodSignature(), makeMethodAttributes(i, w, oc, a, md, null));
             }
           }
         }
@@ -374,7 +377,7 @@ final public class ClassInstrumenter {
     }
   }
 
-  private static LocalVariableTableWriter makeNewLocals(ClassWriter w, CodeReader oldCode, Compiler.Output output)
+    private static LocalVariableTableWriter makeNewLocals(ClassWriter w, CodeReader oldCode, Compiler.Output output, MethodData md, com.ibm.wala.shrikeBT.MethodEditor.SignaturePatch signaturePatch)
       throws InvalidClassFileException {
     int[][] oldMap = LocalVariableTableReader.makeVarMap(oldCode);
     if (oldMap != null) {
@@ -392,7 +395,7 @@ final public class ClassInstrumenter {
         }
       }
 
-      int[] rawTable = LocalVariableTableWriter.makeRawTable(newMap, output);
+      int[] rawTable = LocalVariableTableWriter.makeRawTable(newMap, output, w, signaturePatch);
       if (rawTable == null || rawTable.length == 0) {
         return null;
       } else {
@@ -405,7 +408,7 @@ final public class ClassInstrumenter {
     }
   }
 
-  private ClassWriter.Element[] makeMethodAttributes(int m, ClassWriter w, CodeReader oldCode, Compiler.Output output, MethodData md)
+  private ClassWriter.Element[] makeMethodAttributes(int m, ClassWriter w, CodeReader oldCode, Compiler.Output output, MethodData md, com.ibm.wala.shrikeBT.MethodEditor.SignaturePatch signaturePatch)
       throws InvalidClassFileException {
     CodeWriter code = makeNewCode(w, output);
 
@@ -418,7 +421,7 @@ final public class ClassInstrumenter {
       if (lines != null) {
         codeAttrCount++;
       }
-      locals = makeNewLocals(w, oldCode, output);
+      locals = makeNewLocals(w, oldCode, output, md, signaturePatch);
       if (locals != null) {
         codeAttrCount++;
       }
@@ -466,28 +469,32 @@ final public class ClassInstrumenter {
 
     ClassReader.AttrIterator iter = new ClassReader.AttrIterator();
     cr.initMethodAttributeIterator(m, iter);
+
     int methodAttrCount = iter.getRemainingAttributesCount();
     if (oldCode == null) {
-      methodAttrCount++;
+	methodAttrCount++;
     }
+
     ClassWriter.Element[] methodAttributes = new ClassWriter.Element[methodAttrCount];
-    for (int i = 0; iter.isValid(); iter.advance()) {
+    for (int i = 0, j = 0; iter.isValid(); iter.advance()) {
       if (iter.getName().equals("Code")) {
-        methodAttributes[i] = code;
-        code = null;
-        if (oldCode == null) {
-          throw new Error("No old code provided, but Code attribute found");
-        }
+	  if (oldCode != null) {
+	      methodAttributes[j++] = code;
+	      code = null;
+	      if (oldCode == null) {
+		  throw new Error("No old code provided, but Code attribute found");
+	      }
+	  }
       } else {
-        methodAttributes[i] = new ClassWriter.RawElement(cr.getBytes(), iter.getRawOffset(), iter.getRawSize());
+	  methodAttributes[j++] = new ClassWriter.RawElement(cr.getBytes(), iter.getRawOffset(), iter.getRawSize());
       }
       i++;
     }
     if (oldCode == null) {
-      if (code == null) {
-        throw new Error("Old code not provided but existing code was found and replaced");
-      }
-      methodAttributes[methodAttrCount - 1] = code;
+	if (code == null) {
+	    throw new Error("Old code not provided but existing code was found and replaced");
+	}
+	methodAttributes[methodAttributes.length - 1] = code;
     }
 
     return methodAttributes;

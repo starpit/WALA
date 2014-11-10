@@ -556,6 +556,10 @@ public class ClassWriter implements ClassConstants {
     addMethod(access, addCPUtf8(name), addCPUtf8(type), attributes);
   }
 
+  public void addMethod(int access, int nameIndex, String type, Element[] attributes) {
+    addMethod(access, nameIndex, addCPUtf8(type), attributes);
+  }
+
   /**
    * Add a field to the class.
    * 

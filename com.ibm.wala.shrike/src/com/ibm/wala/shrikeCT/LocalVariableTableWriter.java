@@ -89,7 +89,7 @@ public final class LocalVariableTableWriter extends ClassWriter.Element {
    *          information about that local variable at that offset
    * @throws IllegalArgumentException if varMap == null
    */
-  public static int[] makeRawTable(int[][] varMap, Compiler.Output output) throws IllegalArgumentException {
+  public static int[] makeRawTable(int[][] varMap, Compiler.Output output, ClassWriter cw, com.ibm.wala.shrikeBT.MethodEditor.SignaturePatch signaturePatch) throws IllegalArgumentException {
     if (varMap == null) {
       throw new IllegalArgumentException("varMap == null");
     }
@@ -148,6 +148,21 @@ public final class LocalVariableTableWriter extends ClassWriter.Element {
       } else {
         int[] r = new int[entryCount * 5];
         System.arraycopy(entries, 0, r, 0, r.length);
+
+	if (signaturePatch != null) {
+	    System.err.println("GOOFA UPDATING PARAMS");
+	    int paramOffset = output.isStatic() ? 0 : 1;
+	    for (int i = 0; i < signaturePatch.getNumParams(); i++) {
+		if (signaturePatch.hasParamTypeChanged(i)) {
+		    int newTypeIndex = cw.addCPClass(signaturePatch.getParamType(i));
+		    int paramIndex = i + paramOffset;
+		    System.err.println("\tat " + paramIndex + " " + entries[paramIndex*5+3] + " => " + newTypeIndex + "(typeName=" + signaturePatch.getParamType(i) + ")");
+		    entries[paramIndex * 5 + 3] = newTypeIndex;
+		}
+	    }
+	}
+	
+
         return r;
       }
     } catch (ArrayIndexOutOfBoundsException e) {

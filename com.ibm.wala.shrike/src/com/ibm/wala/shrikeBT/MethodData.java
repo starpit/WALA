@@ -31,7 +31,7 @@ public final class MethodData {
 
   final private String name;
 
-  final private String signature;
+  /*final*/ private String signature;
 
   private IInstruction[] instructions;
 
@@ -40,6 +40,8 @@ public final class MethodData {
   private int[] instructionsToBytecodes;
 
   private boolean hasChanged = false;
+
+  private MethodEditor.SignaturePatch signatureUpdatePatch = null;
 
   /**
    * Create information for a method, with no exception handlers and a dummy mapping of instructions to original bytecodes. 
@@ -122,6 +124,21 @@ public final class MethodData {
   public String getSignature() {
     return signature;
   }
+
+    public boolean hasUpdatedSignature() {
+	return signatureUpdatePatch != null;
+    }
+    public MethodEditor.SignaturePatch getSignaturePatch() {
+	return signatureUpdatePatch;
+    }
+    /*public boolean hasArgumentChanged(int i) {
+	return signatureUpdatePatch != null && signatureUpdatePatch.hasParamTypeChanged(i);
+	}*/
+    public void setSignature(MethodEditor.SignaturePatch signatureUpdatePatch) {
+	this.signatureUpdatePatch = signatureUpdatePatch;
+	hasChanged = true;
+	signature = signatureUpdatePatch.getNewSignature();
+    }
 
   /**
    * @return the method name
